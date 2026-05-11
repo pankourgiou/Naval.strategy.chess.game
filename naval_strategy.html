@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Naval Strategy — 10×10</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+:root{
+  --bg:#0a0e14;--board-light:#1a2535;--board-dark:#0d1520;--border:#1e3a5f;
+  --accent:#00d4ff;--accent2:#00ff9d;--selected:rgba(0,212,255,0.35);
+  --valid:rgba(0,255,157,0.25);--capture:rgba(255,60,60,0.4);--panel:#0d1a2a;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:#cde;font-family:'Share Tech Mono',monospace;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  padding:16px 8px 30px;
+  background-image:radial-gradient(ellipse at 20% 10%,rgba(0,80,120,.18) 0%,transparent 60%),
+    radial-gradient(ellipse at 80% 90%,rgba(0,60,100,.14) 0%,transparent 60%);}
+h1{font-family:'Orbitron',sans-serif;font-size:clamp(1rem,3.5vw,1.9rem);font-weight:900;
+  letter-spacing:.18em;color:var(--accent);
+  text-shadow:0 0 18px var(--accent),0 0 40px rgba(0,212,255,.3);margin-bottom:4px;}
+.subtitle{font-size:.7rem;letter-spacing:.2em;color:#557;margin-bottom:12px;}
+.mode-bar{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;justify-content:center;}
+.mode-btn{font-family:'Orbitron',sans-serif;font-size:.62rem;letter-spacing:.1em;
+  padding:6px 14px;border-radius:4px;border:1px solid #1e3a5f;background:#070d14;
+  color:#557;cursor:pointer;transition:all .15s;}
+.mode-btn:hover{border-color:var(--accent);color:var(--accent);}
+.mode-btn.active{background:var(--accent);color:#000;border-color:var(--accent);
+  box-shadow:0 0 10px rgba(0,212,255,.4);}
+.diff-bar{display:none;gap:6px;margin-bottom:12px;flex-wrap:wrap;justify-content:center;align-items:center;}
+.diff-bar.show{display:flex;}
+.diff-label{font-size:.6rem;color:#446;letter-spacing:.1em;}
+.diff-btn{font-family:'Orbitron',sans-serif;font-size:.58rem;letter-spacing:.1em;
+  padding:5px 11px;border-radius:4px;border:1px solid #1e3a5f;background:#070d14;
+  color:#446;cursor:pointer;transition:all .15s;}
+.diff-btn:hover{border-color:#4af;color:#4af;}
+.diff-btn[data-d="1"].active{background:#2a6a2a;color:#7f7;border-color:#3a9a3a;box-shadow:0 0 8px #2a6a2a;}
+.diff-btn[data-d="2"].active{background:#6a5a00;color:#ffd;border-color:#aa9000;box-shadow:0 0 8px #6a5a00;}
+.diff-btn[data-d="3"].active{background:#6a1a1a;color:#faa;border-color:#aa2222;box-shadow:0 0 8px #6a1a1a;}
+#thinking{display:none;font-size:.68rem;color:#4af;letter-spacing:.14em;margin-bottom:8px;
+  animation:blink 1s steps(1) infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+.game-wrap{display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;justify-content:center;width:100%;max-width:980px;}
+.board-area{display:flex;flex-direction:column;align-items:center;}
+.coord-row{display:flex;}
+.coord-cell{width:52px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.57rem;color:#446;}
+.coord-col{width:18px;height:52px;display:flex;align-items:center;justify-content:center;font-size:.57rem;color:#446;}
+.corner{width:18px;height:18px;}
+#board{display:grid;grid-template-columns:repeat(10,52px);grid-template-rows:repeat(10,52px);
+  border:2px solid var(--border);box-shadow:0 0 30px rgba(0,150,220,.15),inset 0 0 20px rgba(0,0,0,.5);}
+.cell{width:52px;height:52px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;position:relative;transition:background .1s;user-select:none;}
+.cell.light{background:var(--board-light);}
+.cell.dark{background:var(--board-dark);}
+.cell.selected{background:var(--selected)!important;box-shadow:inset 0 0 12px rgba(0,212,255,.5);}
+.cell.valid-move::after{content:'';position:absolute;width:20px;height:20px;border-radius:50%;
+  background:var(--valid);border:2px solid rgba(0,255,157,.5);pointer-events:none;}
+.cell.valid-capture{background:var(--capture)!important;box-shadow:inset 0 0 10px rgba(255,60,60,.4);}
+.cell:hover{filter:brightness(1.18);}
+.cell.last-from{outline:2px solid rgba(255,200,0,.4);outline-offset:-2px;}
+.cell.last-to{outline:2px solid rgba(255,200,0,.6);outline-offset:-2px;}
+.cell span{font-size:1.42rem;line-height:1;pointer-events:none;}
+.sub-piece{display:flex;align-items:center;justify-content:center;font-size:.9rem;font-weight:700;
+  width:38px;height:38px;border-radius:6px;border:2px solid rgba(255,255,255,.25);pointer-events:none;}
+.sub-T-red{background:radial-gradient(circle,#ff5555,#aa0000);color:#fff;box-shadow:0 0 8px #f33;}
+.sub-T-blue{background:radial-gradient(circle,#6699ff,#2244cc);color:#fff;box-shadow:0 0 8px #48f;}
+.sub-V-grey{background:radial-gradient(circle,#ccc,#666);color:#000;box-shadow:0 0 8px #aaa;}
+.sub-V-green{background:radial-gradient(circle,#66ee88,#228844);color:#000;box-shadow:0 0 8px #4d6;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:12px;min-width:195px;max-width:220px;box-shadow:0 0 18px rgba(0,0,0,.4);}
+.panel h2{font-family:'Orbitron',sans-serif;font-size:.7rem;letter-spacing:.18em;
+  color:var(--accent);margin-bottom:8px;border-bottom:1px solid #1e3a5f;padding-bottom:5px;}
+.turn-indicator{font-family:'Orbitron',sans-serif;font-size:.72rem;padding:7px 8px;
+  border-radius:5px;margin-bottom:8px;text-align:center;letter-spacing:.08em;}
+.turn-white{background:rgba(200,200,200,.12);border:1px solid #888;color:#ddd;}
+.turn-black{background:rgba(40,40,40,.5);border:1px solid #333;color:#aaa;}
+.status-msg{font-size:.66rem;color:var(--accent2);min-height:30px;margin-bottom:8px;line-height:1.5;}
+.legend-row{display:flex;align-items:center;gap:7px;font-size:.62rem;color:#789;margin-bottom:4px;}
+.dot{width:13px;height:13px;border-radius:3px;flex-shrink:0;}
+.captured-label{font-size:.6rem;color:#446;margin-bottom:2px;letter-spacing:.1em;}
+.captured-pieces{font-size:.92rem;min-height:20px;word-break:break-all;margin-bottom:5px;}
+#btn-reset{margin-top:8px;width:100%;padding:7px;background:transparent;
+  border:1px solid var(--accent);color:var(--accent);font-family:'Orbitron',sans-serif;
+  font-size:.63rem;letter-spacing:.1em;cursor:pointer;border-radius:4px;transition:all .15s;}
+#btn-reset:hover{background:var(--accent);color:#000;}
+.move-log{margin-top:8px;max-height:110px;overflow-y:auto;font-size:.59rem;color:#556;
+  line-height:1.7;scrollbar-width:thin;scrollbar-color:#1e3a5f transparent;}
+.move-log div:last-child{color:#89a;}
+.game-over-banner{display:none;font-family:'Orbitron',sans-serif;font-size:1rem;
+  color:#ffcc00;text-shadow:0 0 12px #ffcc00;text-align:center;letter-spacing:.12em;margin:8px 0 0;}
+details{margin-top:10px;background:#070d14;border:1px solid #1e3a5f;border-radius:6px;font-size:.61rem;color:#668;}
+summary{cursor:pointer;padding:6px 10px;font-family:'Orbitron',sans-serif;font-size:.62rem;
+  letter-spacing:.12em;color:#4af;list-style:none;}
+details[open] summary{border-bottom:1px solid #1e3a5f;}
+details .rules-body{padding:7px 10px;line-height:1.7;}
+details .rules-body b{color:#8cf;}
+</style>
+</head>
+<body>
+<h1>&#9875; NAVAL STRATEGY</h1>
+<div class="subtitle">10 &times; 10 &middot; SUBMARINES EDITION</div>
+
+<div class="mode-bar">
+  <button class="mode-btn active" data-m="pvp">&#128101; PLAYER VS PLAYER</button>
+  <button class="mode-btn" data-m="pvc">&#129302; PLAYER VS COMPUTER</button>
+</div>
+<div class="diff-bar" id="diff-bar">
+  <span class="diff-label">DIFFICULTY:</span>
+  <button class="diff-btn" data-d="1">&#128994; RECRUIT</button>
+  <button class="diff-btn active" data-d="2">&#128993; CAPTAIN</button>
+  <button class="diff-btn" data-d="3">&#128308; ADMIRAL</button>
+</div>
+<div id="thinking">&#9881; COMPUTING MOVE&#8230;</div>
+
+<div class="game-wrap">
+  <div class="panel">
+    <h2>COMMAND</h2>
+    <div id="turn-display" class="turn-indicator turn-white">&#11036; WHITE'S TURN</div>
+    <div id="status-msg" class="status-msg">Select a piece to move.</div>
+    <div id="game-over-banner" class="game-over-banner"></div>
+
+    <h2 style="margin-top:8px">LEGEND</h2>
+    <div class="legend-row"><div class="dot" style="background:#e8e8e8;border:1px solid #555"></div>White pieces</div>
+    <div class="legend-row"><div class="dot" style="background:#333;border:1px solid #555"></div>Black pieces</div>
+    <div class="legend-row"><div class="dot" style="background:#ff3333;box-shadow:0 0 6px #f33"></div>Black T-Sub (red)</div>
+    <div class="legend-row"><div class="dot" style="background:#4488ff;box-shadow:0 0 6px #48f"></div>Black V-Sub (blue)</div>
+    <div class="legend-row"><div class="dot" style="background:#44dd66;box-shadow:0 0 6px #4d6"></div>White T-Sub (green)</div>
+    <div class="legend-row"><div class="dot" style="background:#aaa;border:1px solid #666"></div>White V-Sub (grey)</div>
+
+    <div style="margin-top:10px">
+      <div class="captured-label">WHITE CAPTURED:</div>
+      <div id="cap-white" class="captured-pieces"></div>
+      <div class="captured-label">BLACK CAPTURED:</div>
+      <div id="cap-black" class="captured-pieces"></div>
+    </div>
+
+    <button id="btn-reset">&#8635; NEW GAME</button>
+    <div class="move-log" id="move-log"></div>
+
+    <details>
+      <summary>&#128214; RULES</summary>
+      <div class="rules-body">
+        <b>Board:</b> 10x10. Standard chess rules for King, Queen, Rook, Bishop, Knight, Pawn.<br><br>
+        <b>T-Sub</b> (Red/Green): up to 4 squares forward/backward, then 1 left or right. Cannot jump.<br><br>
+        <b>V-Sub</b> (Blue/Grey): up to 3 diagonal squares per arm (all 4 diagonal directions). Cannot jump.<br><br>
+        Subs start flanking King &amp; Queen. Win by capturing enemy King.
+      </div>
+    </details>
+  </div>
+
+  <div class="board-area">
+    <div class="coord-row">
+      <div class="corner"></div>
+      <div id="col-labels" style="display:flex"></div>
+      <div class="corner"></div>
+    </div>
+    <div style="display:flex">
+      <div id="row-labels-left" style="display:flex;flex-direction:column"></div>
+      <div id="board"></div>
+      <div id="row-labels-right" style="display:flex;flex-direction:column"></div>
+    </div>
+    <div class="coord-row">
+      <div class="corner"></div>
+      <div id="col-labels-bot" style="display:flex"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PIECES={
+  wK:{sym:'\u2654',team:'white',type:'king'},
+  wQ:{sym:'\u2655',team:'white',type:'queen'},
+  wR:{sym:'\u2656',team:'white',type:'rook'},
+  wB:{sym:'\u2657',team:'white',type:'bishop'},
+  wN:{sym:'\u2658',team:'white',type:'knight'},
+  wP:{sym:'\u2659',team:'white',type:'pawn'},
+  wST:{sym:'T',team:'white',type:'sub-T',subClass:'sub-V-green'},
+  wSV:{sym:'V',team:'white',type:'sub-V',subClass:'sub-V-grey'},
+  bK:{sym:'\u265A',team:'black',type:'king'},
+  bQ:{sym:'\u265B',team:'black',type:'queen'},
+  bR:{sym:'\u265C',team:'black',type:'rook'},
+  bB:{sym:'\u265D',team:'black',type:'bishop'},
+  bN:{sym:'\u265E',team:'black',type:'knight'},
+  bP:{sym:'\u265F',team:'black',type:'pawn'},
+  bST:{sym:'T',team:'black',type:'sub-T',subClass:'sub-T-red'},
+  bSV:{sym:'V',team:'black',type:'sub-V',subClass:'sub-T-blue'},
+};
+
+const VALS={king:10000,queen:900,rook:500,bishop:320,knight:300,pawn:100,'sub-T':450,'sub-V':380};
+
+function initBoard(){
+  const b=Array.from({length:10},()=>Array(10).fill(null));
+  ['bR','bN','bB','bST','bQ','bK','bSV','bB','bN','bR'].forEach((p,c)=>b[0][c]=p);
+  for(let c=0;c<10;c++)b[1][c]='bP';
+  ['wR','wN','wB','wST','wQ','wK','wSV','wB','wN','wR'].forEach((p,c)=>b[9][c]=p);
+  for(let c=0;c<10;c++)b[8][c]='wP';
+  return b;
+}
+
+let board=initBoard(),turn='white',selected=null,validMoves=[],
+    capturedWhite=[],capturedBlack=[],moveLog=[],gameOver=false,
+    mode='pvp',difficulty=2,pcTeam='black',lastMove=null,aiThinking=false;
+
+function inB(r,c){return r>=0&&r<10&&c>=0&&c<10;}
+function teamOf(p){return p?PIECES[p].team:null;}
+function isEnemy(p,me){const t=teamOf(p);return t&&t!==me;}
+function isFriend(p,me){const t=teamOf(p);return t&&t===me;}
+
+function getMoves(b,r,c){
+  const pid=b[r][c];if(!pid)return[];
+  const p=PIECES[pid],me=p.team,moves=[];
+  const add=(tr,tc)=>{
+    if(!inB(tr,tc))return false;
+    const t=b[tr][tc];
+    if(isFriend(t,me))return false;
+    moves.push({r:tr,c:tc,capture:!!t});
+    return !t;
+  };
+  const slide=(dr,dc)=>{
+    let nr=r+dr,nc=c+dc;
+    while(inB(nr,nc)){if(!add(nr,nc))break;nr+=dr;nc+=dc;}
+  };
+  switch(p.type){
+    case'pawn':{
+      const d=me==='white'?-1:1,sr=me==='white'?8:1;
+      if(inB(r+d,c)&&!b[r+d][c]){
+        moves.push({r:r+d,c,capture:false});
+        if(r===sr&&!b[r+2*d][c])moves.push({r:r+2*d,c,capture:false});
+      }
+      [-1,1].forEach(dc=>{if(inB(r+d,c+dc)&&isEnemy(b[r+d][c+dc],me))moves.push({r:r+d,c:c+dc,capture:true});});
+      break;
+    }
+    case'rook':[[0,1],[0,-1],[1,0],[-1,0]].forEach(([a,b])=>slide(a,b));break;
+    case'bishop':[[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([a,b])=>slide(a,b));break;
+    case'queen':[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([a,b])=>slide(a,b));break;
+    case'knight':[[2,1],[2,-1],[-2,1],[-2,-1],[1,2],[1,-2],[-1,2],[-1,-2]].forEach(([a,b])=>add(r+a,c+b));break;
+    case'king':[[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([a,b])=>add(r+a,c+b));break;
+    case'sub-T':{
+      const fwd=me==='white'?-1:1;
+      [fwd,-fwd].forEach(dr=>{
+        let nr=r+dr,blocked=false;
+        for(let s=1;s<=4&&!blocked;s++){
+          if(!inB(nr,c))break;
+          const t=b[nr][c];
+          if(t){blocked=true;if(isEnemy(t,me))moves.push({r:nr,c,capture:true});break;}
+          [-1,1].forEach(dc=>{
+            if(inB(nr,c+dc)){const ts=b[nr][c+dc];if(!isFriend(ts,me))moves.push({r:nr,c:c+dc,capture:!!ts});}
+          });
+          nr+=dr;
+        }
+      });
+      break;
+    }
+    case'sub-V':{
+      const fwd=me==='white'?-1:1;
+      [fwd,-fwd].forEach(fwdD=>{
+        [-1,1].forEach(dc=>{
+          let nr=r+fwdD,nc=c+dc,bl=false;
+          for(let s=1;s<=3&&!bl;s++){
+            if(!inB(nr,nc))break;
+            const t=b[nr][nc];
+            if(t){if(isEnemy(t,me))moves.push({r:nr,c:nc,capture:true});bl=true;break;}
+            moves.push({r:nr,c:nc,capture:false});
+            nr+=fwdD;nc+=dc;
+          }
+        });
+      });
+      break;
+    }
+  }
+  return moves;
+}
+
+function allMoves(b,team){
+  const list=[];
+  for(let r=0;r<10;r++)for(let c=0;c<10;c++){
+    if(teamOf(b[r][c])===team){
+      getMoves(b,r,c).forEach(m=>list.push({fr:r,fc:c,tr:m.r,tc:m.c,capture:m.capture}));
+    }
+  }
+  return list;
+}
+
+function cloneBoard(b){return b.map(row=>[...row]);}
+
+function applyMoveB(b,fr,fc,tr,tc){
+  const nb=cloneBoard(b);
+  const pid=nb[fr][fc];
+  nb[tr][tc]=pid;nb[fr][fc]=null;
+  if(PIECES[pid]&&PIECES[pid].type==='pawn'){
+    if((PIECES[pid].team==='white'&&tr===0)||(PIECES[pid].team==='black'&&tr===9))
+      nb[tr][tc]=PIECES[pid].team==='white'?'wQ':'bQ';
+  }
+  return nb;
+}
+
+function posBonus(type,team,r,c){
+  const cr=4.5-r,cc=4.5-c,dist=cr*cr+cc*cc;
+  if(type==='pawn')return(team==='white'?(9-r)*5:r*5)-dist*0.2;
+  if(type==='knight'||type==='bishop')return-dist*0.6;
+  return-dist*0.2;
+}
+
+function evaluate(b){
+  let score=0;
+  for(let r=0;r<10;r++)for(let c=0;c<10;c++){
+    const pid=b[r][c];if(!pid)continue;
+    const p=PIECES[pid],v=(VALS[p.type]||0)+posBonus(p.type,p.team,r,c);
+    score+=(p.team==='white'?1:-1)*v;
+  }
+  return score;
+}
+
+function minimax(b,depth,alpha,beta,maximising){
+  const team=maximising?'white':'black';
+  const moves=allMoves(b,team);
+  if(depth===0||!moves.length)return{score:evaluate(b)};
+  let best=null;
+  if(maximising){
+    let bestScore=-Infinity;
+    for(const m of moves){
+      const cap=b[m.tr][m.tc];
+      if(cap&&PIECES[cap]&&PIECES[cap].type==='king')return{score:90000+depth,move:m};
+      const res=minimax(applyMoveB(b,m.fr,m.fc,m.tr,m.tc),depth-1,alpha,beta,false);
+      if(res.score>bestScore){bestScore=res.score;best={score:bestScore,move:m};}
+      alpha=Math.max(alpha,bestScore);
+      if(beta<=alpha)break;
+    }
+  }else{
+    let bestScore=Infinity;
+    for(const m of moves){
+      const cap=b[m.tr][m.tc];
+      if(cap&&PIECES[cap]&&PIECES[cap].type==='king')return{score:-90000-depth,move:m};
+      const res=minimax(applyMoveB(b,m.fr,m.fc,m.tr,m.tc),depth-1,alpha,beta,true);
+      if(res.score<bestScore){bestScore=res.score;best={score:bestScore,move:m};}
+      beta=Math.min(beta,bestScore);
+      if(beta<=alpha)break;
+    }
+  }
+  return best||{score:evaluate(b)};
+}
+
+function getAIMove(){
+  const moves=allMoves(board,pcTeam);
+  if(!moves.length)return null;
+  // Always grab king if possible
+  for(const m of moves){
+    const cap=board[m.tr][m.tc];
+    if(cap&&PIECES[cap]&&PIECES[cap].type==='king')return m;
+  }
+  if(difficulty===1){
+    const caps=moves.filter(m=>m.capture);
+    const pool=(caps.length&&Math.random()<0.55)?caps:moves;
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+  if(difficulty===2){
+    const shuffled=[...moves].sort(()=>Math.random()-.5);
+    let best=null,bestScore=Infinity;
+    for(const m of shuffled){
+      const s=minimax(applyMoveB(board,m.fr,m.fc,m.tr,m.tc),1,-Infinity,Infinity,true).score;
+      if(s<bestScore){bestScore=s;best=m;}
+    }
+    if(Math.random()<0.22){
+      const caps=moves.filter(m=>m.capture);
+      if(caps.length)return caps[Math.floor(Math.random()*caps.length)];
+      return moves[Math.floor(Math.random()*moves.length)];
+    }
+    return best||moves[0];
+  }
+  // Hard: depth 3
+  const res=minimax(board,3,-Infinity,Infinity,false);
+  return res.move||moves[0];
+}
+
+function doMove(fr,fc,tr,tc){
+  const pid=board[fr][fc];
+  const captured=board[tr][tc];
+  board[tr][tc]=pid;board[fr][fc]=null;
+  if(PIECES[pid]&&PIECES[pid].type==='pawn'){
+    if((turn==='white'&&tr===0)||(turn==='black'&&tr===9))
+      board[tr][tc]=turn==='white'?'wQ':'bQ';
+  }
+  if(captured){
+    (turn==='white'?capturedWhite:capturedBlack).push(captured);
+    if(PIECES[captured]&&PIECES[captured].type==='king'){
+      gameOver=true;
+      const isPC=mode==='pvc'&&turn===pcTeam;
+      const label=isPC?'&#129302; COMPUTER WINS! &#9875;':(turn==='white'?'&#11036; WHITE WINS! &#9875;':'&#11035; BLACK WINS! &#9875;');
+      const banner=document.getElementById('game-over-banner');
+      banner.style.display='block';banner.innerHTML=label;
+      setStatus('Game over!');
+    }
+  }
+  logMove(fr,fc,tr,tc,pid,captured);
+  lastMove={fr,fc,tr,tc};
+  if(!gameOver){
+    turn=turn==='white'?'black':'white';
+    const isPC=mode==='pvc'&&turn===pcTeam;
+    setStatus(isPC?'&#9881; Computer is thinking\u2026':'Select a piece to move.');
+  }
+}
+
+function renderBoard(){
+  const el=document.getElementById('board');el.innerHTML='';
+  const validSet=new Set(validMoves.map(m=>m.r+','+m.c));
+  const capSet=new Set(validMoves.filter(m=>m.capture).map(m=>m.r+','+m.c));
+  for(let r=0;r<10;r++)for(let c=0;c<10;c++){
+    const cell=document.createElement('div');
+    cell.className='cell '+((r+c)%2===0?'light':'dark');
+    cell.dataset.r=r;cell.dataset.c=c;
+    const key=r+','+c;
+    if(selected&&selected.r===r&&selected.c===c)cell.classList.add('selected');
+    else if(capSet.has(key))cell.classList.add('valid-capture');
+    else if(validSet.has(key))cell.classList.add('valid-move');
+    if(lastMove){
+      if(r===lastMove.fr&&c===lastMove.fc)cell.classList.add('last-from');
+      if(r===lastMove.tr&&c===lastMove.tc)cell.classList.add('last-to');
+    }
+    const pid=board[r][c];
+    if(pid){
+      const p=PIECES[pid];
+      if(p.type==='sub-T'||p.type==='sub-V'){
+        const d=document.createElement('div');
+        d.className='sub-piece '+p.subClass;
+        d.textContent=p.type==='sub-T'?'T':'V';
+        cell.appendChild(d);
+      }else{
+        const sp=document.createElement('span');sp.textContent=p.sym;cell.appendChild(sp);
+      }
+    }
+    cell.addEventListener('click',onCellClick);
+    el.appendChild(cell);
+  }
+  const isPC=mode==='pvc'&&turn===pcTeam;
+  const td=document.getElementById('turn-display');
+  if(turn==='white'){
+    td.textContent=isPC?'\u2654 COMPUTER':'&#11036; WHITE\'S TURN';
+    td.className='turn-indicator turn-white';
+  }else{
+    td.innerHTML=isPC?'&#129302; COMPUTER':'&#11035; BLACK\'S TURN';
+    td.className='turn-indicator turn-black';
+  }
+  document.getElementById('cap-white').textContent=capturedWhite.map(p=>PIECES[p]?PIECES[p].sym:p).join(' ');
+  document.getElementById('cap-black').textContent=capturedBlack.map(p=>PIECES[p]?PIECES[p].sym:p).join(' ');
+}
+
+function onCellClick(e){
+  if(gameOver||aiThinking)return;
+  if(mode==='pvc'&&turn===pcTeam)return;
+  const r=+e.currentTarget.dataset.r,c=+e.currentTarget.dataset.c;
+  const pid=board[r][c];
+  if(selected){
+    const mv=validMoves.find(m=>m.r===r&&m.c===c);
+    if(mv){
+      doMove(selected.r,selected.c,r,c);
+      selected=null;validMoves=[];
+      renderBoard();
+      if(!gameOver&&mode==='pvc'&&turn===pcTeam)scheduleAI();
+    }else if(pid&&teamOf(pid)===turn){
+      selected={r,c};validMoves=getMoves(board,r,c);
+      setStatus('Selected '+PIECES[pid].type+'. '+validMoves.length+' moves.');
+      renderBoard();
+    }else{
+      selected=null;validMoves=[];setStatus('Select a piece to move.');renderBoard();
+    }
+  }else{
+    if(pid&&teamOf(pid)===turn){
+      selected={r,c};validMoves=getMoves(board,r,c);
+      setStatus('Selected '+PIECES[pid].type+'. '+validMoves.length+' moves available.');
+      renderBoard();
+    }
+  }
+}
+
+function scheduleAI(){
+  if(gameOver)return;
+  aiThinking=true;
+  document.getElementById('thinking').style.display='block';
+  const delay=difficulty===1?300:difficulty===2?500:900;
+  setTimeout(()=>{
+    const mv=getAIMove();
+    if(mv){doMove(mv.fr,mv.fc,mv.tr,mv.tc);selected=null;validMoves=[];}
+    aiThinking=false;
+    document.getElementById('thinking').style.display='none';
+    renderBoard();
+  },delay);
+}
+
+function setStatus(msg){document.getElementById('status-msg').innerHTML=msg;}
+
+const COLS='ABCDEFGHIJ';
+function logMove(fr,fc,tr,tc,pid,captured){
+  const from=COLS[fc]+(10-fr),to=COLS[tc]+(10-tr);
+  const cap=captured?' x'+(PIECES[captured]?PIECES[captured].sym:captured):'';
+  const entry=(moveLog.length+1)+'. '+(PIECES[pid]?PIECES[pid].sym:pid)+' '+from+'\u2192'+to+cap;
+  moveLog.push(entry);
+  const log=document.getElementById('move-log');
+  const div=document.createElement('div');div.textContent=entry;
+  log.appendChild(div);log.scrollTop=log.scrollHeight;
+}
+
+function buildCoords(){
+  for(let c=0;c<10;c++){
+    ['col-labels','col-labels-bot'].forEach(id=>{
+      const d=document.createElement('div');d.className='coord-cell';d.textContent=COLS[c];
+      document.getElementById(id).appendChild(d);
+    });
+  }
+  for(let r=0;r<10;r++){
+    ['row-labels-left','row-labels-right'].forEach(id=>{
+      const d=document.createElement('div');d.className='coord-col';d.textContent=10-r;
+      document.getElementById(id).appendChild(d);
+    });
+  }
+}
+
+function resetGame(){
+  board=initBoard();turn='white';selected=null;validMoves=[];
+  capturedWhite=[];capturedBlack=[];moveLog=[];gameOver=false;lastMove=null;aiThinking=false;
+  document.getElementById('game-over-banner').style.display='none';
+  document.getElementById('thinking').style.display='none';
+  document.getElementById('move-log').innerHTML='';
+  const isPC=mode==='pvc'&&turn===pcTeam;
+  setStatus(isPC?'&#9881; Computer thinking\u2026':'Select a piece to move.');
+  renderBoard();
+  if(mode==='pvc'&&turn===pcTeam)scheduleAI();
+}
+
+document.querySelectorAll('.mode-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    mode=btn.dataset.m;
+    document.getElementById('diff-bar').classList.toggle('show',mode==='pvc');
+    resetGame();
+  });
+});
+
+document.querySelectorAll('.diff-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    difficulty=+btn.dataset.d;
+    resetGame();
+  });
+});
+
+document.getElementById('btn-reset').addEventListener('click',resetGame);
+
+buildCoords();
+resetGame();
+</script>
+</body>
+</html>
