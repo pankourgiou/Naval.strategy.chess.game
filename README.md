@@ -1,0 +1,1 @@
+So, I made this little game it's a strategy game 10*10 squares like chess but also with 2 submarines...the game shows you how they move while you play it's a chess strategy thing but a bit different. Someone could make an even bigger or weirder so, copy-paste the code on your notepad and save it as .html then double click the file and enjoy playing!
