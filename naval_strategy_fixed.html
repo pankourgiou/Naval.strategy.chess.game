@@ -386,7 +386,8 @@ function doMove(fr,fc,tr,tc){
     if(PIECES[captured]&&PIECES[captured].type==='king'){
       gameOver=true;
       const isPC=mode==='pvc'&&turn===pcTeam;
-      const label=isPC?'&#129302; COMPUTER WINS! &#9875;':(turn==='white'?'&#11036; WHITE WINS! &#9875;':'&#11035; BLACK WINS! &#9875;');
+      const isHuman=mode==='pvc'&&turn!==pcTeam;
+      const label=isPC?'&#129302; COMPUTER WINS! &#9875;':isHuman?'&#127881; YOU WIN! &#9875;':(turn==='white'?'&#11036; WHITE WINS! &#9875;':'&#11035; BLACK WINS! &#9875;');
       const banner=document.getElementById('game-over-banner');
       banner.style.display='block';banner.innerHTML=label;
       setStatus('Game over!');
